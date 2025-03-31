@@ -1,0 +1,2 @@
+# thư viện icon 
+    npm install lucide-react
