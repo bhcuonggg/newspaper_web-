@@ -1,2 +1,5 @@
 # thư viện icon 
     npm install lucide-react
+# tailwin -css
+    npm install -D tailwindcss postcss autoprefixer
+    npx tailwindcss init -p
