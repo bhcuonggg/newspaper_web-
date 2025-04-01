@@ -1,15 +1,44 @@
 import React, { useState } from "react";
+import { GoogleLogin } from '@react-oauth/google';
+import { googleLogin } from '../Service/AuthService';
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null);
+  const [user, setUser] = useState(null);
 
+  
   const handleDropdown = (index) => {
     setActiveDropdown(activeDropdown === index ? null : index);
   };
+  // handle login
 
+  const handleLoginSuccess = async (credentialResponse) => {
+    try {
+      const data = await googleLogin(credentialResponse.credential);
+      console.log('Login success:', data);
+      
+      // Lưu token vào localStorage hoặc cookie
+      localStorage.setItem('token', data.token);
+      setUser(data.user);
+      
+      alert(`Đăng nhập thành công! Chào mừng ${data.user.name}`);
+    } catch (error) {
+      console.error('Login failed:', error);
+      alert('Đăng nhập thất bại: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setUser(null);
+    alert('Đã đăng xuất!');
+  };
+
+
+  // 
   const menuItems = [
-    { name: "TRANG CHỦ", subItems: [] },
+    { name: "TRANG CHỦ", subItems: [], link: "/" },
     { 
       name: "THẾ GIỚI", 
       subItems: ["Châu Á", "Châu Âu", "Châu Mỹ", "Châu Phi", "Quốc tế"] 
@@ -81,7 +110,7 @@ const Header = () => {
           {/* Logo */}
           <div className="flex-shrink-0">
             <img
-              src="image.png"
+              src="/image.png"
               alt="Logo"
               className="h-14"
             />
@@ -89,18 +118,25 @@ const Header = () => {
 
           {/* Desktop menu */}
           <div className="hidden md:flex items-center">
-            {menuItems.map((item, index) => (
+          {menuItems.map((item, index) => (
               <div key={index} className="relative">
-                <button
-                  className="text-gray-800 mx-3 font-bold px-3 py-2 flex items-center hover:text-red-600 bg-transparent border-none cursor-pointer text-sm"
-                  onClick={() => handleDropdown(index)}
-                >
-                  {item.name}
-                  {item.subItems.length > 0 && (
-                    <span className="text-xs ml-1">▼</span>
-                  )}
-                </button>
-                
+                {item.link ? (
+                  <a
+                    href={item.link}
+                    className="text-gray-800 mx-3 font-bold px-3 py-2 flex items-center hover:text-red-600 text-sm"
+                  >
+                    {item.name}
+                  </a>
+                ) : (
+                  <button
+                    className="text-gray-800 mx-3 font-bold px-3 py-2 flex items-center hover:text-red-600 bg-transparent border-none cursor-pointer text-sm"
+                    onClick={() => handleDropdown(index)}
+                  >
+                    {item.name}
+                    {item.subItems.length > 0 && <span className="text-xs ml-1">▼</span>}
+                  </button>
+                )}
+
                 {item.subItems.length > 0 && activeDropdown === index && (
                   <div className="absolute left-0 mt-1 w-48 bg-white shadow-lg rounded-md py-1 z-10">
                     {item.subItems.map((subItem, subIndex) => (
@@ -116,6 +152,7 @@ const Header = () => {
                 )}
               </div>
             ))}
+
           </div>
 
           {/* Search and login */}
@@ -129,10 +166,41 @@ const Header = () => {
               <button className="p-2 bg-gray-50 border-none cursor-pointer">🔍</button>
             </div>
             
-            <button className="px-4 py-2 bg-green-600 text-white border-none rounded-md cursor-pointer font-bold flex items-center hover:bg-green-700">
-              <span className="inline-block w-4 h-4 mr-1 bg-contain bg-user"></span>
-              Đăng nhập
+            {user ? (
+          <div className="flex items-center">
+            <img 
+              src={user.avatar } 
+              alt={user.name}
+              className="w-8 h-8 rounded-full mr-2"
+            />
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+            >
+              Đăng xuất
             </button>
+          </div>
+        ) : (
+          <GoogleLogin
+            onSuccess={handleLoginSuccess}
+            onError={() => {
+              console.log('Login Failed');
+              alert('Đăng nhập bằng Google thất bại');
+            }}
+            useOneTap // Tuỳ chọn hiển thị one-tap sign-in
+            render={({ onClick }) => (
+              <button
+                onClick={onClick}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
+              >
+                <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12.545 10.239v3.821h5.445c-0.712 2.315-2.647 3.972-5.445 3.972-3.332 0-6.033-2.701-6.033-6.032s2.701-6.032 6.033-6.032c1.498 0 2.866 0.549 3.921 1.453l2.814-2.814c-1.784-1.667-4.166-2.685-6.735-2.685-5.522 0-10 4.477-10 10s4.478 10 10 10c8.396 0 10-7.524 10-10 0-0.167-0.009-0.334-0.015-0.5h-9.985z"/>
+                </svg>
+                Đăng nhập bằng Google
+              </button>
+            )}
+          />
+        )}
             
             <button 
               className="md:hidden ml-2 p-1 bg-transparent border-none text-2xl cursor-pointer"

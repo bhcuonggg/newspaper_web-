@@ -3,3 +3,9 @@
 # tailwin -css
     npm install -D tailwindcss postcss autoprefixer
     npx tailwindcss init -p
+# module 
+    npm install react-router-dom
+ # thư viện login
+    npm install @react-oauth/google jwt-decode
+    npm install @react-oauth/google axios
+    npm install @react-oauth/google 
