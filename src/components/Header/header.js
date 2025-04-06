@@ -1,25 +1,69 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { GoogleLogin } from '@react-oauth/google';
 import { googleLogin } from '../Service/AuthService';
+import axios from 'axios'; // Thêm axios để gọi API
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [user, setUser] = useState(null);
+  const [categories, setCategories] = useState([]); // State để lưu danh mục từ API
 
-  
   const handleDropdown = (index) => {
     setActiveDropdown(activeDropdown === index ? null : index);
   };
-  // handle login
+  
+  // Lưu session user 
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const userData = JSON.parse(localStorage.getItem('user'));
+      setUser(userData);
+    }
+    
+    // Gọi API để lấy danh mục
+    fetchCategories();
+  }, []);
 
+  // Hàm gọi API lấy danh mục
+  const fetchCategories = async () => {
+    try {
+      const response = await axios.get('https://apinews-c75x.onrender.com/category'); // Thay API_URL bằng URL thực tế của API
+      // Chuyển đổi dữ liệu API thành định dạng menuItems
+      const formattedCategories = formatCategories(response.data);
+      setCategories(formattedCategories);
+    } catch (error) {
+      console.error('Lỗi khi lấy danh mục:', error);
+    }
+  };
+
+  const formatCategories = (categoriesData) => {
+    // Danh mục mặc định - Trang chủ
+    const formattedMenu = [
+      { name: "TRANG CHỦ", subItems: [], link: "/" }
+    ];
+    
+    // Thêm các danh mục từ API - Đơn giản hóa vì không có thông tin về danh mục con
+    categoriesData.forEach(category => {
+      formattedMenu.push({
+        id: category.id,
+        name: category.name.toUpperCase(),
+        subItems: [], // Mảng rỗng vì API không trả về danh mục con
+        link: `/category/${category.id}` // Tạo link dựa vào ID
+      });
+    });
+    
+    return formattedMenu;
+  };
+
+  //handle Login
   const handleLoginSuccess = async (credentialResponse) => {
     try {
       const data = await googleLogin(credentialResponse.credential);
       console.log('Login success:', data);
-      
       // Lưu token vào localStorage hoặc cookie
       localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
       setUser(data.user);
       
       alert(`Đăng nhập thành công! Chào mừng ${data.user.name}`);
@@ -28,34 +72,13 @@ const Header = () => {
       alert('Đăng nhập thất bại: ' + (error.response?.data?.error || error.message));
     }
   };
-
+  
+  // handle logout
   const handleLogout = () => {
     localStorage.removeItem('token');
     setUser(null);
     alert('Đã đăng xuất!');
   };
-
-
-  // 
-  const menuItems = [
-    { name: "TRANG CHỦ", subItems: [], link: "/" },
-    { 
-      name: "THẾ GIỚI", 
-      subItems: ["Châu Á", "Châu Âu", "Châu Mỹ", "Châu Phi", "Quốc tế"] 
-    },
-    { 
-      name: "KINH DOANH", 
-      subItems: ["Tài chính", "Bất động sản", "Chứng khoán", "Doanh nghiệp"] 
-    },
-    { 
-      name: "THỂ THAO", 
-      subItems: ["Bóng đá", "Tennis", "Các môn khác"] 
-    },
-    { 
-      name: "GIẢI TRÍ", 
-      subItems: ["Sao Việt", "Điện ảnh", "Âm nhạc", "Thời trang"] 
-    },
-  ];
 
   return (
     <header className="shadow-md">
@@ -116,9 +139,9 @@ const Header = () => {
             />
           </div>
 
-          {/* Desktop menu */}
+          {/* Desktop menu - Sử dụng danh mục từ API */}
           <div className="hidden md:flex items-center">
-          {menuItems.map((item, index) => (
+            {categories.map((item, index) => (
               <div key={index} className="relative">
                 {item.link ? (
                   <a
@@ -133,11 +156,11 @@ const Header = () => {
                     onClick={() => handleDropdown(index)}
                   >
                     {item.name}
-                    {item.subItems.length > 0 && <span className="text-xs ml-1">▼</span>}
+                    {item.subItems && item.subItems.length > 0 && <span className="text-xs ml-1">▼</span>}
                   </button>
                 )}
 
-                {item.subItems.length > 0 && activeDropdown === index && (
+                {item.subItems && item.subItems.length > 0 && activeDropdown === index && (
                   <div className="absolute left-0 mt-1 w-48 bg-white shadow-lg rounded-md py-1 z-10">
                     {item.subItems.map((subItem, subIndex) => (
                       <a
@@ -152,7 +175,6 @@ const Header = () => {
                 )}
               </div>
             ))}
-
           </div>
 
           {/* Search and login */}
@@ -161,46 +183,46 @@ const Header = () => {
               <input
                 type="text"
                 placeholder="Tìm kiếm..."
-                className="px-3 py-1 w-48 border-none focus:outline-none"
+                className="px-3 py-1 w-64 order-none focus:outline-none"
               />
               <button className="p-2 bg-gray-50 border-none cursor-pointer">🔍</button>
             </div>
             
             {user ? (
-          <div className="flex items-center">
-            <img 
-              src={user.avatar } 
-              alt={user.name}
-              className="w-8 h-8 rounded-full mr-2"
-            />
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-            >
-              Đăng xuất
-            </button>
-          </div>
-        ) : (
-          <GoogleLogin
-            onSuccess={handleLoginSuccess}
-            onError={() => {
-              console.log('Login Failed');
-              alert('Đăng nhập bằng Google thất bại');
-            }}
-            useOneTap // Tuỳ chọn hiển thị one-tap sign-in
-            render={({ onClick }) => (
-              <button
-                onClick={onClick}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
-              >
-                <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12.545 10.239v3.821h5.445c-0.712 2.315-2.647 3.972-5.445 3.972-3.332 0-6.033-2.701-6.033-6.032s2.701-6.032 6.033-6.032c1.498 0 2.866 0.549 3.921 1.453l2.814-2.814c-1.784-1.667-4.166-2.685-6.735-2.685-5.522 0-10 4.477-10 10s4.478 10 10 10c8.396 0 10-7.524 10-10 0-0.167-0.009-0.334-0.015-0.5h-9.985z"/>
-                </svg>
-                Đăng nhập bằng Google
-              </button>
+              <div className="flex items-center">
+                <img 
+                  src={user.avatar} 
+                  alt={user.name}
+                  className="w-8 h-8 rounded-full mr-2"
+                />
+                <button
+                  onClick={handleLogout}
+                  className="px-4 w-36 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                >
+                  Đăng xuất
+                </button>
+              </div>
+            ) : (
+              <GoogleLogin
+                onSuccess={handleLoginSuccess}
+                onError={() => {
+                  console.log('Login Failed');
+                  alert('Đăng nhập bằng Google thất bại');
+                }}
+                useOneTap // Tuỳ chọn hiển thị one-tap sign-in
+                render={({ onClick }) => (
+                  <button
+                    onClick={onClick}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12.545 10.239v3.821h5.445c-0.712 2.315-2.647 3.972-5.445 3.972-3.332 0-6.033-2.701-6.033-6.032s2.701-6.032 6.033-6.032 1.498 0 2.866 0.549 3.921 1.453l2.814-2.814c-1.784-1.667-4.166-2.685-6.735-2.685-5.522 0-10 4.477-10 10s4.478 10 10 10c8.396 0 10-7.524 10-10 0-0.167-0.009-0.334-0.015-0.5h-9.985z"/>
+                    </svg>
+                    Đăng nhập bằng Google
+                  </button>
+                )}
+              />
             )}
-          />
-        )}
             
             <button 
               className="md:hidden ml-2 p-1 bg-transparent border-none text-2xl cursor-pointer"
@@ -211,22 +233,22 @@ const Header = () => {
           </div>
         </div>
 
-        {/* Mobile menu */}
+        {/* Mobile menu - Cũng sử dụng danh mục từ API */}
         {isMenuOpen && (
           <div className="md:hidden p-4 border-t border-gray-200">
-            {menuItems.map((item, index) => (
+            {categories.map((item, index) => (
               <div key={index}>
                 <button
                   className="w-full text-left py-3 px-3 mb-1 bg-gray-50 border-none rounded-md flex justify-between items-center font-medium cursor-pointer"
                   onClick={() => handleDropdown(index)}
                 >
                   {item.name}
-                  {item.subItems.length > 0 && (
+                  {item.subItems && item.subItems.length > 0 && (
                     <span className={`text-xs ${activeDropdown === index ? 'rotate-180' : ''}`}>▼</span>
                   )}
                 </button>
                 
-                {item.subItems.length > 0 && activeDropdown === index && (
+                {item.subItems && item.subItems.length > 0 && activeDropdown === index && (
                   <div className="pl-6 mb-2">
                     {item.subItems.map((subItem, subIndex) => (
                       <a
