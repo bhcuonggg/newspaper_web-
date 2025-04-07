@@ -1,26 +1,45 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { Link, useNavigate } from "react-router-dom"; // Import Link và useNavigate từ react-router-dom
+import { Link, useNavigate } from "react-router-dom";
 
 const MainContent = () => {
   const [featuredArticles, setFeaturedArticles] = useState([]);
   const [categoryArticles, setCategoryArticles] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const navigate = useNavigate(); // Hook để điều hướng
+  const [allCategories, setAllCategories] = useState([]);
+  const [displayedArticleIds, setDisplayedArticleIds] = useState(new Set()); // Track displayed articles
+  const navigate = useNavigate();
+  const categoryCarouselRef = useRef(null);
   
-  // List of categories to display
-  const categories = ["Thời sự", "Thế giới", "Kinh doanh", "Giải trí"];
-  
-  // Sử dụng đúng API URL đã triển khai trên Render
+  // API Base URL
   const API_BASE_URL = "https://apinews-c75x.onrender.com";
+  
+  // Fetch all categories from API
+  const fetchAllCategories = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/category`);
+      if (response.data) {
+        setAllCategories(response.data);
+        return response.data;
+      }
+    } catch (err) {
+      console.error("Error fetching categories:", err);
+      return [];
+    }
+  };
   
   // Get all articles for featured section
   const fetchFeaturedArticles = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/articles?page=1`);
       if (response.data && response.data.articles) {
-        setFeaturedArticles(response.data.articles);
+        const articles = response.data.articles;
+        setFeaturedArticles(articles);
+        
+        // Track featured article IDs
+        const featuredIds = new Set(articles.map(article => article.id));
+        setDisplayedArticleIds(featuredIds);
       }
     } catch (err) {
       setError("Không thể tải tin nổi bật");
@@ -31,11 +50,20 @@ const MainContent = () => {
   // Get articles by category
   const fetchCategoryArticles = async (categoryId, categoryName) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/articles/getByCategoryId/${categoryId}?page=1&limit=4`);
+      // Fetch more articles than needed to account for possible exclusions
+      const response = await axios.get(`${API_BASE_URL}/articles/getByCategoryId/${categoryId}?page=1&limit=8`);
       if (response.data && response.data.articles) {
+        // Filter out articles that have already been displayed in featured section
+        const filteredArticles = response.data.articles.filter(article => 
+          !displayedArticleIds.has(article.id)
+        );
+        
+        // Take only the first 4 articles after filtering
+        const articlesToDisplay = filteredArticles.slice(0, 4);
+        
         setCategoryArticles(prev => ({
           ...prev,
-          [categoryName]: response.data.articles
+          [categoryName]: articlesToDisplay
         }));
       }
     } catch (err) {
@@ -43,41 +71,57 @@ const MainContent = () => {
     }
   };
   
+  // Carousel navigation functions
+  const scrollLeft = () => {
+    if (categoryCarouselRef.current) {
+      categoryCarouselRef.current.scrollBy({ left: -300, behavior: 'smooth' });
+    }
+  };
+  
+  const scrollRight = () => {
+    if (categoryCarouselRef.current) {
+      categoryCarouselRef.current.scrollBy({ left: 300, behavior: 'smooth' });
+    }
+  };
+  
+  // Navigate to category page
+  const goToCategoryPage = (categoryId) => {
+    navigate(`/category/${categoryId}`);
+  };
+  
   // Fetch all required data
   useEffect(() => {
     setLoading(true);
     
     const fetchAllData = async () => {
+      // First fetch featured articles
       await fetchFeaturedArticles();
       
-      // Assuming you have a mapping of category names to IDs
-      // You'll need to replace these with your actual category IDs
-      const categoryIds = {
-        "Thời sự": 1,
-        "Thế giới": 2,
-        "Kinh doanh": 3,
-        "Giải trí": 4
-      };
+      // Fetch all categories
+      const categories = await fetchAllCategories();
       
-      // Fetch articles for each category
-      const categoryPromises = categories.map(category => 
-        fetchCategoryArticles(categoryIds[category], category)
-      );
+      // Then fetch articles for each category (after we know which articles are featured)
+      if (categories && categories.length > 0) {
+        const categoryPromises = categories.map(category => 
+          fetchCategoryArticles(category.id, category.name)
+        );
+        
+        await Promise.all(categoryPromises);
+      }
       
-      await Promise.all(categoryPromises);
       setLoading(false);
     };
     
     fetchAllData();
   }, []);
 
-  // Hàm xử lý khi bấm vào bài viết
+  // Handle article click
   const handleArticleClick = (articleId, event) => {
-    event.preventDefault(); // Ngăn hành vi mặc định của thẻ a
-    navigate(`/detail/${articleId}`); // Điều hướng đến trang detail với ID bài viết
+    event.preventDefault();
+    navigate(`/detail/${articleId}`);
   };
   
-  // Handle loading state with graceful UI feedback
+  // Handle loading state
   if (loading) {
     return (
       <main className="max-w-6xl mx-auto px-4 py-6">
@@ -185,45 +229,111 @@ const MainContent = () => {
         </div>
       </section>
       
-      {/* Categories */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {categories.map((category) => (
-          <div key={category} className="border border-gray-200 rounded-lg overflow-hidden transition duration-200 hover:-translate-y-1 hover:shadow-lg">
-            <h2 className="bg-gray-900 text-white p-3 m-0 text-lg font-bold">{category}</h2>
-            <div className="p-3">
-              {categoryArticles[category] && categoryArticles[category].length > 0 ? (
-                <>
-                  <div className="mb-3">
-                    <Link to={`/detail/${categoryArticles[category][0].id}`} className="block">
-                      <img 
-                        src={categoryArticles[category][0].image || "/anhnen.png"}
-                        alt={categoryArticles[category][0].title} 
-                        className="w-full h-[180px] object-cover rounded mb-2"
-                      />
-                      <h3 className="font-bold my-2 text-base hover:text-red-600 transition-colors">
-                        {categoryArticles[category][0].title}
-                      </h3>
-                    </Link>
+      {/* Categories Carousel */}
+      <section className="mb-8">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold border-b-2 border-red-600 pb-2">DANH MỤC</h2>
+          <div className="flex gap-2">
+            <button 
+              onClick={scrollLeft}
+              className="bg-gray-200 hover:bg-gray-300 rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+              aria-label="Scroll left"
+            >
+              ◀
+            </button>
+            <button 
+              onClick={scrollRight}
+              className="bg-gray-200 hover:bg-gray-300 rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+              aria-label="Scroll right"
+            >
+              ▶
+            </button>
+          </div>
+        </div>
+        
+        <div 
+          ref={categoryCarouselRef}
+          className="overflow-x-auto hide-scrollbar flex gap-6 pb-4 snap-x scroll-smooth"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {allCategories.length > 0 ? (
+            allCategories.map((category) => {
+              const categoryData = categoryArticles[category.name] || [];
+              
+              // If there are no articles after filtering, show a message
+              if (categoryData.length === 0) {
+                return (
+                  <div 
+                    key={category.id} 
+                    className="border border-gray-200 rounded-lg overflow-hidden transition duration-200 hover:-translate-y-1 hover:shadow-lg flex-shrink-0 w-80 snap-start"
+                  >
+                    <h2 className="bg-gray-900 text-white p-3 m-0 text-lg font-bold">{category.name}</h2>
+                    <div className="p-3">
+                      <p className="text-center py-4 text-gray-500">Không có bài viết</p>
+                    </div>
+                  </div>
+                );
+              }
+              
+              const mainArticle = categoryData[0];
+              // Filter out main article from the list of secondary articles
+              const secondaryArticles = categoryData.slice(1).filter(article => article.id !== mainArticle.id);
+              
+              return (
+                <div 
+                  key={category.id} 
+                  className="border border-gray-200 rounded-lg overflow-hidden transition duration-200 hover:-translate-y-1 hover:shadow-lg flex-shrink-0 w-80 snap-start flex flex-col"
+                >
+                  <h2 className="bg-gray-900 text-white p-3 m-0 text-lg font-bold">{category.name}</h2>
+                  <div className="p-3 flex-grow">
+                    <div className="mb-3">
+                      <Link to={`/detail/${mainArticle.id}`} className="block">
+                        <img 
+                          src={mainArticle.image || "/anhnen.png"}
+                          alt={mainArticle.title} 
+                          className="w-full h-[180px] object-cover rounded mb-2"
+                        />
+                        <h3 className="font-bold my-2 text-base hover:text-red-600 transition-colors">
+                          {mainArticle.title}
+                        </h3>
+                      </Link>
+                    </div>
+                    
+                    <div className="border-t border-gray-200 pt-2">
+                      {secondaryArticles.length > 0 ? (
+                        secondaryArticles.map((article) => (
+                          <Link 
+                            key={article.id} 
+                            to={`/detail/${article.id}`} 
+                            className="block text-gray-800 py-1 transition-colors duration-200 hover:text-red-600"
+                          >
+                            • {article.title}
+                          </Link>
+                        ))
+                      ) : (
+                        <p className="text-center py-2 text-gray-500">Không có bài viết phụ</p>
+                      )}
+                    </div>
                   </div>
                   
-                  <div className="border-t border-gray-200 pt-2">
-                    {categoryArticles[category].slice(1, 4).map((article) => (
-                      <Link 
-                        key={article.id} 
-                        to={`/detail/${article.id}`} 
-                        className="block text-gray-800 py-1 transition-colors duration-200 hover:text-red-600"
-                      >
-                        • {article.title}
-                      </Link>
-                    ))}
+                  {/* View More button */}
+                  <div className="px-3 pb-3 mt-auto">
+                    <button
+                      onClick={() => goToCategoryPage(category.id)}
+                      className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium rounded text-center transition-colors"
+                    >
+                      Xem thêm
+                    </button>
                   </div>
-                </>
-              ) : (
-                <p className="text-center py-4 text-gray-500">Không có bài viết</p>
-              )}
+                </div>
+              );
+            })
+          ) : (
+            <div className="col-span-full text-center py-8 bg-gray-100 rounded w-full">
+              <p className="text-gray-500">Không có danh mục</p>
             </div>
-          </div>
-        ))}
+          )}
+        </div>
       </section>
       
       {/* Videos section */}
@@ -267,6 +377,13 @@ const MainContent = () => {
           )}
         </div>
       </section>
+      
+      {/* Add CSS for hiding scrollbar */}
+      <style jsx>{`
+        .hide-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
     </main>
   );
 };

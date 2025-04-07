@@ -1,17 +1,34 @@
-// src/component/Admin/CategoryManagement.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 
 const CategoryManagement = () => {
-  // Dữ liệu mẫu, trong thực tế sẽ được lấy từ API
-  const [categories, setCategories] = useState([
-    { id: 1, name: 'Tin tức', slug: 'tin-tuc', status: 'active' },
-    { id: 2, name: 'Thể thao', slug: 'the-thao', status: 'active' },
-    { id: 3, name: 'Giải trí', slug: 'giai-tri', status: 'active' },
-  ]);
-  
-  const [newCategory, setNewCategory] = useState({ name: '', slug: '' });
+  const [categories, setCategories] = useState([]);
+  const [newCategory, setNewCategory] = useState({ name: '' });
   const [editingCategory, setEditingCategory] = useState(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const API_BASE_URL = 'https://apinews-c75x.onrender.com/category';
+
+  // Fetch categories when component mounts
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(API_BASE_URL);
+      setCategories(response.data);
+      setError(null);
+    } catch (err) {
+      setError('Không thể tải danh mục. Vui lòng thử lại sau.');
+      console.error('Error fetching categories:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -22,52 +39,82 @@ const CategoryManagement = () => {
     }
   };
 
-  const handleAddCategory = () => {
-    // Trong thực tế sẽ gọi API để tạo danh mục
+  const handleAddCategory = async () => {
+    // Validate
     if (newCategory.name.trim() === '') return;
     
-    const slug = newCategory.slug.trim() === '' 
-      ? newCategory.name.toLowerCase().replace(/\s+/g, '-')
-      : newCategory.slug;
-    
-    const newId = categories.length > 0 ? Math.max(...categories.map(c => c.id)) + 1 : 1;
-    
-    setCategories([
-      ...categories,
-      { id: newId, name: newCategory.name, slug, status: 'active' }
-    ]);
-    
-    setNewCategory({ name: '', slug: '' });
-    setIsAdding(false);
+    try {
+      setLoading(true);
+      // Call API to create new category
+      const response = await axios.post(API_BASE_URL, {
+        name: newCategory.name
+      });
+      
+      // Add new category to state with data returned from API
+      const createdCategory = response.data;
+      setCategories([...categories, createdCategory]);
+      
+      // Reset form
+      setNewCategory({ name: '' });
+      setIsAdding(false);
+      setError(null);
+    } catch (err) {
+      setError('Không thể thêm danh mục. Vui lòng thử lại.');
+      console.error('Error adding category:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEditCategory = (category) => {
     setEditingCategory({ ...category });
   };
 
-  const handleUpdateCategory = () => {
-    // Trong thực tế sẽ gọi API để cập nhật danh mục
+  const handleUpdateCategory = async () => {
+    // Validate
     if (!editingCategory || editingCategory.name.trim() === '') return;
     
-    setCategories(categories.map(c => 
-      c.id === editingCategory.id ? editingCategory : c
-    ));
-    
-    setEditingCategory(null);
-  };
-
-  const handleDeleteCategory = (id) => {
-    // Trong thực tế sẽ gọi API để xóa danh mục
-    if (window.confirm('Bạn có chắc chắn muốn xóa danh mục này?')) {
-      setCategories(categories.filter(c => c.id !== id));
+    try {
+      setLoading(true);
+      // Call API to update category
+      const response = await axios.put(`${API_BASE_URL}/${editingCategory.id}`, {
+        name: editingCategory.name
+      });
+      
+      // Update state
+      setCategories(categories.map(c => 
+        c.id === editingCategory.id ? response.data : c
+      ));
+      
+      setEditingCategory(null);
+      setError(null);
+    } catch (err) {
+      setError('Không thể cập nhật danh mục. Vui lòng thử lại.');
+      console.error('Error updating category:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const toggleCategoryStatus = (id) => {
-    // Trong thực tế sẽ gọi API để thay đổi trạng thái
-    setCategories(categories.map(c => 
-      c.id === id ? { ...c, status: c.status === 'active' ? 'inactive' : 'active' } : c
-    ));
+  const handleDeleteCategory = async (id) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa danh mục này?')) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      // Call API to delete category
+      await axios.delete(`${API_BASE_URL}/${id}`);
+      
+      // Update state
+      setCategories(categories.filter(c => c.id !== id));
+      setError(null);
+    } catch (err) {
+      setError('Không thể xóa danh mục. Vui lòng thử lại.');
+      console.error('Error deleting category:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -77,10 +124,17 @@ const CategoryManagement = () => {
         <button 
           onClick={() => setIsAdding(true)}
           className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+          disabled={loading}
         >
           Thêm danh mục mới
         </button>
       </div>
+      
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4" role="alert">
+          <span className="block sm:inline">{error}</span>
+        </div>
+      )}
       
       {isAdding && (
         <div className="bg-gray-50 p-4 rounded-lg mb-6">
@@ -94,29 +148,21 @@ const CategoryManagement = () => {
               onChange={handleInputChange}
               placeholder="Nhập tên danh mục"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div className="mb-4">
-            <label className="block text-gray-700 font-medium mb-2">Slug (tùy chọn)</label>
-            <input
-              type="text"
-              name="slug"
-              value={newCategory.slug}
-              onChange={handleInputChange}
-              placeholder="Nhập slug hoặc để trống để tự động tạo"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
             />
           </div>
           <div className="flex space-x-2">
             <button 
               onClick={handleAddCategory}
               className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+              disabled={loading}
             >
-              Lưu
+              {loading ? 'Đang xử lý...' : 'Lưu'}
             </button>
             <button 
               onClick={() => setIsAdding(false)}
               className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+              disabled={loading}
             >
               Hủy
             </button>
@@ -135,32 +181,32 @@ const CategoryManagement = () => {
               value={editingCategory.name}
               onChange={handleInputChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div className="mb-4">
-            <label className="block text-gray-700 font-medium mb-2">Slug</label>
-            <input
-              type="text"
-              name="slug"
-              value={editingCategory.slug}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
             />
           </div>
           <div className="flex space-x-2">
             <button 
               onClick={handleUpdateCategory}
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+              disabled={loading}
             >
-              Cập nhật
+              {loading ? 'Đang xử lý...' : 'Cập nhật'}
             </button>
             <button 
               onClick={() => setEditingCategory(null)}
               className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+              disabled={loading}
             >
               Hủy
             </button>
           </div>
+        </div>
+      )}
+      
+      {loading && !isAdding && !editingCategory && (
+        <div className="text-center py-4">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+          <p className="mt-2 text-gray-500">Đang tải dữ liệu...</p>
         </div>
       )}
       
@@ -170,45 +216,40 @@ const CategoryManagement = () => {
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tên danh mục</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Slug</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trạng thái</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Thao tác</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {categories.map(category => (
-              <tr key={category.id}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{category.id}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{category.name}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{category.slug}</td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span 
-                    onClick={() => toggleCategoryStatus(category.id)}
-                    className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full cursor-pointer ${
-                      category.status === 'active' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}
-                  >
-                    {category.status === 'active' ? 'Hoạt động' : 'Không hoạt động'}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <button
-                    onClick={() => handleEditCategory(category)}
-                    className="text-blue-600 hover:text-blue-900 mr-3"
-                  >
-                    Sửa
-                  </button>
-                  <button
-                    onClick={() => handleDeleteCategory(category.id)}
-                    className="text-red-600 hover:text-red-900"
-                  >
-                    Xóa
-                  </button>
+            {categories.length > 0 ? (
+              categories.map(category => (
+                <tr key={category.id}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{category.id}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{category.name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => handleEditCategory(category)}
+                      className="text-blue-600 hover:text-blue-900 mr-3"
+                      disabled={loading}
+                    >
+                      Sửa
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCategory(category.id)}
+                      className="text-red-600 hover:text-red-900"
+                      disabled={loading}
+                    >
+                      Xóa
+                    </button>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="3" className="px-6 py-4 text-center text-sm text-gray-500">
+                  {loading ? 'Đang tải dữ liệu...' : 'Không có danh mục nào'}
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>

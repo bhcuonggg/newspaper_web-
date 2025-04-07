@@ -2,29 +2,46 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import Header from "./components/Header/header";
-import MainContent from "./components/Main/MainContent";
 import Footer from "./components/Footer/footer";
-import "./styles.css";
+import MainContent from "./components/Main/MainContent";
+import DetailPage from "./components/Main/DetailPage";
 import Login from "./components/Admin/Login";
 import Dashboard from "./components/Admin/Dashboard";
-import DetailPage from "./components/Main/DetailPage";
+import "./styles.css";
+
 function App() {
-  // Thay thế bằng Google Client ID thực tế của bạn
   const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || '781279445244-3imq1spqc7hqovf8lm30uj2mi94jf2lp.apps.googleusercontent.com';
 
   return (
     <GoogleOAuthProvider clientId={googleClientId}>
       <Router>
-        <div className="app">
-          <Header />
-          <Routes>
-            <Route path="/" element={<MainContent />} />
-            <Route path="/admin/login" element={<Login />} />
-            <Route path="/detail/:id" element={<DetailPage />} />
-            <Route path="/admin/dashboard" element={<Dashboard />} />
-          </Routes>
-          <Footer />
-        </div>
+        <Routes>
+          {/* Layout người dùng */}
+          <Route
+            path="/"
+            element={
+              <>
+                <Header />
+                <MainContent />
+                <Footer />
+              </>
+            }
+          />
+          <Route
+            path="/detail/:id"
+            element={
+              <>
+                <Header />
+                <DetailPage />
+                <Footer />
+              </>
+            }
+          />
+
+          {/* Layout trang admin, KHÔNG có header/footer */}
+          <Route path="/admin/login" element={<Login />} />
+          <Route path="/admin/dashboard" element={<Dashboard />} />
+        </Routes>
       </Router>
     </GoogleOAuthProvider>
   );
