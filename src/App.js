@@ -7,6 +7,7 @@ import MainContent from "./components/Main/MainContent";
 import DetailPage from "./components/Main/DetailPage";
 import Login from "./components/Admin/Login";
 import Dashboard from "./components/Admin/Dashboard";
+import Category_Articles from "./components/Main/CategoryBrowser";
 import "./styles.css";
 
 function App() {
@@ -34,6 +35,15 @@ function App() {
                 <Header />
                 <DetailPage />
                 <Footer />
+              </>
+            }
+          />
+           <Route
+            path="/category/:categoryId"
+            element={
+              <>
+                {" "}
+                <Header /> <Category_Articles /> <Footer />
               </>
             }
           />
