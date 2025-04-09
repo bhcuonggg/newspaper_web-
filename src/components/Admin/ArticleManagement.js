@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 const API_URL = 'https://apinews-c75x.onrender.com/articles';
+const CATEGORIES_URL = 'https://apinews-c75x.onrender.com/category';
 
 const ArticleManagement = () => {
   const [articles, setArticles] = useState([]);
@@ -9,6 +10,7 @@ const ArticleManagement = () => {
   const [editingArticle, setEditingArticle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [searchKeyword, setSearchKeyword] = useState('');
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
@@ -20,10 +22,10 @@ const ArticleManagement = () => {
     title: '',
     content: '',
     image: '',
-    category_ids: [] // mảng
+    author: 'Admin', // Adding a default author value since it's required by the API
+    category_ids: []
   });
 
-  // Fetch articles on component mount and when page changes
   useEffect(() => {
     fetchArticles(pagination.currentPage);
     fetchCategories();
@@ -48,19 +50,34 @@ const ArticleManagement = () => {
     }
   };
 
-  // Fetch categories
+  const searchArticles = async () => {
+    if (!searchKeyword.trim()) {
+      fetchArticles(1);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API_URL}/search?keyword=${searchKeyword}&page=1&limit=10`);
+      setArticles(response.data.articles);
+      setPagination({
+        currentPage: response.data.currentPage,
+        totalPages: response.data.totalPages,
+        totalItems: response.data.totalItems
+      });
+      setError(null);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Không tìm thấy kết quả phù hợp');
+      setArticles([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchCategories = async () => {
     try {
-      // This would be replaced with the actual API call
-       const response = await axios.get('https://apinews-c75x.onrender.com/category');
-       setCategories(response.data);
-      
-      // sử dụng dữ liểu set cứng 
-      // setCategories([
-      //   { id: 1, name: 'Tin tức' },
-      //   { id: 2, name: 'Thể thao' },
-      //   { id: 3, name: 'Giải trí' }
-      // ]);
+      const response = await axios.get(CATEGORIES_URL);
+      setCategories(response.data);
     } catch (err) {
       console.error('Error fetching categories:', err);
     }
@@ -90,62 +107,66 @@ const ArticleManagement = () => {
     });
   };
 
-      const initializeArticleForm = (article = null) => {
-        if (article) {
-          const categoryIds = article.article_categories?.map(cat => cat.category_id) || [];
-      
-          setArticleFormData({
-            title: article.title || '',
-            content: article.content || '',
-            image: article.image || '',
-            category_ids: categoryIds
-          });
-          setEditingArticle(article);
-        } else {
-          setArticleFormData({
-            title: '',
-            content: '',
-            image: '',
-            category_ids: []
-          });
-          setEditingArticle(null);
-        }
-        setShowArticleForm(true);
-      };
+  const initializeArticleForm = (article = null) => {
+    if (article) {
+      const categoryIds = article.article_categories?.map(cat => cat.category_id) || [];
+  
+      setArticleFormData({
+        title: article.title || '',
+        content: article.content || '',
+        image: article.image || '',
+        author: article.author || 'Admin',
+        category_ids: categoryIds
+      });
+      setEditingArticle(article);
+    } else {
+      setArticleFormData({
+        title: '',
+        content: '',
+        image: '',
+        author: 'Admin',
+        category_ids: []
+      });
+      setEditingArticle(null);
+    }
+    setShowArticleForm(true);
+  };
 
-      const handleSaveArticle = async () => {
-        try {
-          const { title, content, image, category_ids } = articleFormData;
-      
-          if (!title || !content || !image || category_ids.length === 0) {
-            alert('Vui lòng điền đầy đủ thông tin bài viết!');
-            return;
-          }
-      
-          if (editingArticle) {
-            await axios.put(`${API_URL}/${editingArticle.id}`, {
-              title,
-              content,
-              image,
-              category_ids
-            });
-          } else {
-            await axios.post(API_URL, {
-              title,
-              content,
-              image,
-              category_ids
-            });
-          }
-      
-          fetchArticles(pagination.currentPage);
-          setShowArticleForm(false);
-          alert(editingArticle ? 'Cập nhật thành công!' : 'Thêm bài viết thành công!');
-        } catch (err) {
-          alert(`Lỗi: ${err.response?.data?.message || err.message}`);
-        }
+  const handleSaveArticle = async () => {
+    try {
+      const { title, content, image, author, category_ids } = articleFormData;
+  
+      if (!title || !content || !image) {
+        alert('Vui lòng điền đầy đủ thông tin bài viết!');
+        return;
+      }
+  
+      if (category_ids.length === 0) {
+        alert('Vui lòng chọn ít nhất một danh mục!');
+        return;
+      }
+  
+      const payload = {
+        title,
+        content,
+        image,
+        author,
+        category_ids
       };
-      
+  
+      if (editingArticle) {
+        await axios.put(`${API_URL}/${editingArticle.id}`, payload);
+      } else {
+        await axios.post(API_URL, payload);
+      }
+  
+      fetchArticles(pagination.currentPage);
+      setShowArticleForm(false);
+      alert(editingArticle ? 'Cập nhật thành công!' : 'Thêm bài viết thành công!');
+    } catch (err) {
+      alert(`Lỗi: ${err.response?.data?.message || err.message}`);
+    }
+  };
 
   const handleDeleteArticle = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa bài viết này?')) {
@@ -165,26 +186,68 @@ const ArticleManagement = () => {
     }
   };
 
+  const renderPaginationButtons = () => {
+    const pageButtons = [];
+    const maxButtonsToShow = 5;
+    
+    let startPage = Math.max(1, pagination.currentPage - Math.floor(maxButtonsToShow / 2));
+    let endPage = Math.min(pagination.totalPages, startPage + maxButtonsToShow - 1);
+    
+    if (endPage - startPage + 1 < maxButtonsToShow) {
+      startPage = Math.max(1, endPage - maxButtonsToShow + 1);
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+      pageButtons.push(
+        <button
+          key={i}
+          onClick={() => changePage(i)}
+          className={`relative inline-flex items-center px-4 py-2 border ${
+            i === pagination.currentPage
+              ? 'bg-red-50 border-red-500 text-red-600 z-10'
+              : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+          }`}
+        >
+          {i}
+        </button>
+      );
+    }
+    
+    return pageButtons;
+  };
+
   if (loading && articles.length === 0) {
     return <div className="text-center py-10">Đang tải dữ liệu...</div>;
   }
 
-  if (error && articles.length === 0) {
-    return <div className="text-center py-10 text-red-500">{error}</div>;
-  }
-
   return (
     <div className="bg-gray-50 min-h-screen pb-10">
-      
-      
-      <div className="max-w-7xl mx-auto px-4">
+      <div className="max-w-7xl mx-auto px-4 pt-6">
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-lg font-semibold text-gray-800">Danh sách bài báo</h3>
+          <h3 className="text-2xl font-semibold text-gray-800">Quản lý bài báo</h3>
           <button 
             onClick={() => initializeArticleForm()}
             className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
           >
             Thêm bài báo mới
+          </button>
+        </div>
+        
+        {/* Search bar */}
+        <div className="mb-6 flex">
+          <input
+            type="text"
+            value={searchKeyword}
+            onChange={(e) => setSearchKeyword(e.target.value)}
+            placeholder="Tìm kiếm bài báo theo tiêu đề..."
+            className="flex-grow px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-red-500"
+            onKeyPress={(e) => e.key === 'Enter' && searchArticles()}
+          />
+          <button
+            onClick={searchArticles}
+            className="px-4 py-2 bg-red-600 text-white rounded-r-md hover:bg-red-700 transition-colors"
+          >
+            Tìm kiếm
           </button>
         </div>
         
@@ -195,7 +258,7 @@ const ArticleManagement = () => {
             </h4>
             
             <div className="mb-4">
-              <label className="block text-gray-700 font-medium mb-2">Tiêu đề</label>
+              <label className="block text-gray-700 font-medium mb-2">Tiêu đề <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 name="title"
@@ -203,11 +266,12 @@ const ArticleManagement = () => {
                 onChange={handleInputChange}
                 placeholder="Nhập tiêu đề bài báo"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                required
               />
             </div>
             
             <div className="mb-4">
-              <label className="block text-gray-700 font-medium mb-2">URL Hình ảnh</label>
+              <label className="block text-gray-700 font-medium mb-2">URL Hình ảnh <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 name="image"
@@ -215,34 +279,63 @@ const ArticleManagement = () => {
                 onChange={handleInputChange}
                 placeholder="Nhập URL hình ảnh"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                required
               />
+              {articleFormData.image && (
+                <div className="mt-2">
+                  <img 
+                    src={articleFormData.image} 
+                    alt="Preview" 
+                    className="h-24 object-cover rounded border border-gray-200" 
+                    onError={(e) => e.target.src = 'https://via.placeholder.com/150'}
+                  />
+                </div>
+              )}
             </div>
             
             <div className="mb-4">
-              <label className="block text-gray-700 font-medium mb-2">Danh mục</label>
-               <div className="grid grid-cols-3 gap-4">
-                  {categories.map(category => (
-                    <div key={category.id} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        id={`category-${category.id}`}
-                        name="category_ids"
-                        value={category.id}
-                        checked={articleFormData.category_ids.includes(category.id)}
-                        onChange={handleCategoryChange}
-                        className="mr-2 focus:ring-red-500 h-4 w-4 text-red-600 border-gray-300"
-                      />
-                      <label htmlFor={`category-${category.id}`} className="text-gray-700">
-                        {category.name}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-
+              <label className="block text-gray-700 font-medium mb-2">Danh mục <span className="text-red-500">*</span></label>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {categories.map(category => (
+                  <div key={category.id} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id={`category-${category.id}`}
+                      name="category_ids"
+                      value={category.id}
+                      checked={articleFormData.category_ids.includes(category.id)}
+                      onChange={handleCategoryChange}
+                      className="mr-2 focus:ring-red-500 h-4 w-4 text-red-600 border-gray-300"
+                    />
+                    <label htmlFor={`category-${category.id}`} className="text-gray-700">
+                      {category.name}
+                    </label>
+                  </div>
+                ))}
+              </div>
+              {categories.length === 0 && (
+                <p className="text-yellow-600 text-sm mt-2">
+                  Không có danh mục nào. Vui lòng tạo danh mục trước khi thêm bài viết.
+                </p>
+              )}
             </div>
             
+            <div className="mb-4">
+              <label className="block text-gray-700 font-medium mb-2">Tác giả <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                name="author"
+                value={articleFormData.author}
+                onChange={handleInputChange}
+                placeholder="Nhập tên tác giả"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                required
+              />
+            </div>
+
+            
             <div className="mb-6">
-              <label className="block text-gray-700 font-medium mb-2">Nội dung</label>
+              <label className="block text-gray-700 font-medium mb-2">Nội dung <span className="text-red-500">*</span></label>
               <textarea
                 name="content"
                 value={articleFormData.content}
@@ -250,6 +343,7 @@ const ArticleManagement = () => {
                 rows="8"
                 placeholder="Nhập nội dung bài báo"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                required
               ></textarea>
             </div>
             
@@ -270,6 +364,12 @@ const ArticleManagement = () => {
           </div>
         )}
         
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
+            {error}
+          </div>
+        )}
+        
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -278,6 +378,7 @@ const ArticleManagement = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tiêu đề</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Danh mục</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tác giả</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ngày tạo</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Thao tác</th>
                 </tr>
@@ -293,16 +394,22 @@ const ArticleManagement = () => {
                             src={article.image || 'https://via.placeholder.com/50'} 
                             alt={article.title}
                             className="w-10 h-10 object-cover rounded mr-3"
+                            onError={(e) => e.target.src = 'https://via.placeholder.com/50'}
                           />
                           <span className="font-medium">{article.title}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {article.article_categories?.map(cat => (
-                          <span key={cat.category_id} className="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                            {cat.name}
-                          </span>
-                        )) || '-'}
+                        <div className="flex flex-wrap gap-1">
+                          {article.article_categories?.map(cat => (
+                            <span key={cat.category_id} className="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                              {cat.name}
+                            </span>
+                          )) || '-'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {article.author || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {new Date(article.createdAt).toLocaleDateString('vi-VN')}
@@ -325,8 +432,8 @@ const ArticleManagement = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">
-                      Không có bài viết nào
+                    <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
+                      {loading ? 'Đang tải dữ liệu...' : 'Không có bài viết nào'}
                     </td>
                   </tr>
                 )}
@@ -351,19 +458,7 @@ const ArticleManagement = () => {
                 &laquo; Trước
               </button>
               
-              {[...Array(pagination.totalPages).keys()].map(page => (
-                <button
-                  key={page + 1}
-                  onClick={() => changePage(page + 1)}
-                  className={`relative inline-flex items-center px-4 py-2 border ${
-                    page + 1 === pagination.currentPage
-                      ? 'bg-red-50 border-red-500 text-red-600 z-10'
-                      : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                  }`}
-                >
-                  {page + 1}
-                </button>
-              ))}
+              {renderPaginationButtons()}
               
               <button
                 onClick={() => changePage(pagination.currentPage + 1)}
